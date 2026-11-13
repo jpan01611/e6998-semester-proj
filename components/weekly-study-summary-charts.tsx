@@ -172,7 +172,7 @@ export function WeeklyStudySummaryCharts({
         />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className={visibleCharts.length === 1 ? "grid gap-4" : "grid gap-4 xl:grid-cols-3"}>
         {visibleCharts.includes("score") && (expandedChart === null || expandedChart === "score") ? (
         <article
           className={chartCardClass("score")}
