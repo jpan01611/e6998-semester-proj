@@ -1,8 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { LocalStudyWindow } from "@/components/local-study-window";
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import { ReportInterpretation } from "@/components/report-interpretation";
 import { ReportLoadForm } from "@/components/report-load-form";
 import {
   StudyNewStyleCaptionBreakdown,
@@ -861,20 +863,16 @@ export default async function NewStyleReportPage({
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
       <section className="app-panel mx-auto w-full max-w-7xl space-y-6 rounded-2xl p-6">
+        <ReportIdentity />
+        <ReportNavigation
+          currentStudyId={requestedStudyId}
+          activeHref={`/study/${requestedStudyId}/new-style-report`}
+        />
         <header className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-                Humor Study Stats
-              </p>
               <h1 className="text-2xl font-semibold">New Study Interface Report</h1>
             </div>
-            <Link
-              href="/"
-              className="app-button inline-flex rounded-lg px-3 py-2 text-sm font-medium transition"
-            >
-              Home
-            </Link>
           </div>
 
           <section className="app-card rounded-xl p-5">
@@ -993,6 +991,15 @@ export default async function NewStyleReportPage({
             </p>
           </article>
         </section>
+
+        <ReportInterpretation
+          points={[
+            "Like rate is the share of seen captions that users explicitly liked; it is not a measure of caption quality by itself.",
+            "Median next-caption time shows typical navigation speed. Very short times can indicate fast scanning, while long times may reflect discussion or hesitation.",
+            "Use the caption and user breakdowns to find whether an overall rate is broad participation or driven by a small number of users or captions.",
+            "The minimum navigation-event filter changes which users appear in the table; it does not change the underlying study activity.",
+          ]}
+        />
 
         <section className="space-y-2">
           <div>

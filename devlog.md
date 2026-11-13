@@ -46,3 +46,22 @@ been recorded.
   - The report now displays the warning message explaining that captions exist but participant activity has not been recorded:
 
     ![New study report activity status](./public/snapshots/new-study-report-activity-status.png)
+
+## Iteration 2
+
+> **Pain point:** Analysts could see study statistics, but could not quickly understand what the metrics meant, compare studies confidently, or read the crowded charts. Zero-activity studies and slow comparison refreshes made the reports feel ambiguous and inefficient to use.
+
+- Added a study comparison workspace with plain-language metric explanations, visual comparisons, overlap and delta metrics, sample-size context, and inactive-study filtering.
+
+  ![Study comparison workspace](./public/snapshots/iteration-2-study-comparison.png)
+
+- Standardized report navigation across the dashboard and study reports, and optimized comparison refreshes to load only the selected pair with transition feedback.
+- Added the Weekly Summary report with clickable score, engagement, and participation charts, readable diagonal labels, separate legends, and focused expanded-chart views.
+
+  ![Weekly Summary charts](./public/snapshots/iteration-2-weekly-summary-charts.png)
+
+  ![Expanded score chart](./public/snapshots/iteration-2-expanded-score-chart.png)
+
+- Simplified the dashboard to show the Engagement Mix chart and a View all graphs action, while retaining the study-readiness context.
+
+  ![Dashboard Engagement Mix](./public/snapshots/iteration-2-dashboard-engagement.png)

@@ -1,9 +1,15 @@
 import { TopNavbar } from "@/components/top-navbar";
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import {
+  WeeklyStudySummaryCharts,
+  type WeeklyStudyChartRow,
+} from "@/components/weekly-study-summary-charts";
 import { createClient } from "@/utils/supabase/server";
 import Link from "next/link";
 
 const NEW_STYLE_MIN_STUDY_ID = 7;
-const DASHBOARD_STUDY_LOOKBACK = 25;
+const DASHBOARD_STUDY_LOOKBACK = 8;
 
 type DashboardStudy = {
   id: number;
@@ -15,6 +21,7 @@ type StudyActivity = {
   captionCount: number;
   navigationEvents: number;
   voteEvents: number;
+  upvotes: number;
   participantCount: number;
 };
 
@@ -33,7 +40,7 @@ const getStudyActivity = async (
   if (mappingError) throw new Error(`Unable to load study captions: ${mappingError.message}`);
   const mappingIds = (mappings ?? []).map((mapping) => mapping.id);
   if (mappingIds.length === 0) {
-    return { captionCount: 0, navigationEvents: 0, voteEvents: 0, participantCount: 0 };
+    return { captionCount: 0, navigationEvents: 0, voteEvents: 0, upvotes: 0, participantCount: 0 };
   }
 
   const [{ data: navigationRows, error: navigationError }, { data: voteRows, error: voteError }] =
@@ -44,7 +51,7 @@ const getStudyActivity = async (
         .in("study_caption_mapping_id", mappingIds),
       supabase
         .from("study_caption_vote_events")
-        .select("profile_id")
+        .select("profile_id, vote_value")
         .in("study_caption_mapping_id", mappingIds),
     ]);
 
@@ -60,15 +67,15 @@ const getStudyActivity = async (
     captionCount: mappingIds.length,
     navigationEvents: navigationRows?.length ?? 0,
     voteEvents: voteRows?.length ?? 0,
+    upvotes: (voteRows ?? []).filter((row) =>
+      ["up", "upvote", "like", "liked", "1", "true"].includes(String(row.vote_value).toLowerCase()),
+    ).length,
     participantCount: participantIds.size,
   };
 };
 
 export default async function Home() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const [
     { data: studies, error: studiesError },
     { data: newStyleStudies, error: newStyleStudiesError },
@@ -103,79 +110,58 @@ export default async function Home() {
     const activity = studyActivityById.get(study.id);
     return activity && (activity.navigationEvents > 0 || activity.voteEvents > 0);
   });
-  const additionalReports = [
-    {
-      title: "Study detail",
-      description: "Review study vote details",
-      href: latestStudyId ? `/study/${latestStudyId}/study-detail` : null,
-    },
-    {
-      title: "Study engagement risk",
-      description: "Find low-engagement raters",
-      href: latestStudyId ? `/study/${latestStudyId}/engagement-risk` : null,
-    },
-    {
-      title: "Study-to-study comparison",
-      description: "Compare two studies",
-      href: "/reports/study-comparison",
-    },
-    {
-      title: "Weekly humor study summary",
-      description: "Track weekly study trends",
-      href: "/reports/weekly-study-summary",
-    },
-    {
-      title: "Study voting span by user",
-      description: "Review voting duration",
-      href: latestStudyId ? `/study/${latestStudyId}/vote-timing` : null,
-    },
-    {
-      title: "Study upvote percentage by user",
-      description: "Compare individual upvote rates",
-      href: latestStudyId ? `/study/${latestStudyId}/user-upvote-rate` : null,
-    },
-    {
-      title: "Selected user report",
-      description: "Analyze selected raters together",
-      href: latestStudyId ? `/study/${latestStudyId}/selected-user-report` : null,
-    },
-  ];
-
+  const chartRows: WeeklyStudyChartRow[] = (studies ?? []).map((study) => {
+    const activity = studyActivityById.get(study.id);
+    const totalVotes = activity?.voteEvents ?? 0;
+    return {
+      study_id: study.id,
+      study_label: study.slug ? study.slug.slice(0, 14) : `S${study.id}`,
+      weighted_score_pct: totalVotes > 0 ? ((activity?.upvotes ?? 0) / totalVotes) * 100 : 0,
+      total_votes: totalVotes,
+      caption_count: activity?.captionCount ?? 0,
+      votes_per_caption: (activity?.captionCount ?? 0) > 0
+        ? totalVotes / (activity?.captionCount ?? 1)
+        : 0,
+    };
+  });
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavbar />
       <main className="page-shell flex-1 flex items-center justify-center p-6">
-        <section className="app-panel w-full max-w-2xl rounded-2xl p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-                Humor Study Stats
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold">Dashboard</h1>
-            </div>
+        <section className="app-panel w-full max-w-7xl rounded-2xl p-6 sm:p-8">
+          <ReportIdentity />
+
+          <div className="mt-6">
+            <ReportNavigation currentStudyId={latestNewStyleStudyId} activeHref="/" />
           </div>
 
-          <p className="app-muted mt-3 text-sm">
-            Signed in as <span className="font-semibold text-foreground">{user?.email}</span>
-          </p>
+          <h1 className="mt-6 text-3xl font-semibold">Dashboard</h1>
 
           <div className="mt-8">
+            <WeeklyStudySummaryCharts
+              data={chartRows}
+              visibleCharts={["engagement"]}
+              showHeader={false}
+            />
+          </div>
+
+          <div className="mt-6">
             {latestNewStyleStudyId ? (
               <Link
-                href={`/study/${latestNewStyleStudyId}/new-style-report`}
-                className="app-button app-button-primary mx-auto flex min-h-20 max-w-md items-center justify-center rounded-2xl px-6 py-5 text-center text-2xl font-semibold tracking-tight transition sm:text-3xl"
+                href="/reports/weekly-study-summary"
+                className="app-button app-button-primary mx-auto flex min-h-12 max-w-sm items-center justify-center rounded-xl px-5 py-3 text-center text-xl font-semibold tracking-tight transition sm:text-2xl"
               >
-                Latest Study
+                View all graphs
               </Link>
             ) : (
-              <span className="app-button mx-auto flex min-h-20 max-w-md cursor-not-allowed items-center justify-center rounded-2xl px-6 py-5 text-center text-2xl font-semibold tracking-tight opacity-60 sm:text-3xl">
-                Latest Study
+              <span className="app-button mx-auto flex min-h-12 max-w-sm cursor-not-allowed items-center justify-center rounded-xl px-5 py-3 text-center text-xl font-semibold tracking-tight opacity-60 sm:text-2xl">
+                View all graphs
               </span>
             )}
           </div>
 
           {latestStudy && latestStudyActivity ? (
-            <section className="app-card mt-4 rounded-xl p-4" aria-live="polite">
+            <section className="app-card mt-3 rounded-xl p-4" aria-live="polite">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="app-kicker text-xs font-semibold uppercase tracking-wide">
@@ -217,46 +203,6 @@ export default async function Home() {
             </section>
           ) : null}
 
-          <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
-            <details className="group ml-auto flex w-full max-w-lg flex-col items-end">
-              <summary className="app-button order-2 flex cursor-pointer list-none items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition marker:content-none">
-                <span className="group-open:hidden">More reports</span>
-                <span className="hidden group-open:inline">Hide reports</span>
-                <span className="text-xs group-open:hidden" aria-hidden="true">
-                  &#9660;
-                </span>
-                <span className="hidden text-xs group-open:inline" aria-hidden="true">
-                  &#9650;
-                </span>
-              </summary>
-              <div className="app-card order-1 mb-3 grid w-full gap-2 rounded-xl p-3 sm:grid-cols-2">
-                {additionalReports.map((reportOption) =>
-                  reportOption.href ? (
-                    <Link
-                      key={reportOption.title}
-                      href={reportOption.href}
-                      className="app-button rounded-lg px-3 py-2 text-sm transition"
-                    >
-                      <span className="block font-medium">{reportOption.title}</span>
-                      <span className="app-muted mt-0.5 block text-xs">
-                        {reportOption.description}
-                      </span>
-                    </Link>
-                  ) : (
-                    <span
-                      key={reportOption.title}
-                      className="app-button cursor-not-allowed rounded-lg px-3 py-2 text-sm opacity-60"
-                    >
-                      <span className="block font-medium">{reportOption.title}</span>
-                      <span className="app-muted mt-0.5 block text-xs">
-                        {reportOption.description}
-                      </span>
-                    </span>
-                  ),
-                )}
-              </div>
-            </details>
-          </div>
         </section>
       </main>
     </div>

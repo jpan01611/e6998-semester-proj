@@ -1,8 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ReportLoadForm } from "@/components/report-load-form";
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import { ReportInsightBars } from "@/components/report-insight-bars";
+import { ReportInterpretation } from "@/components/report-interpretation";
 import { StudyUserUpvoteRateTable } from "@/components/study-user-upvote-rate-table";
 import type { Database, Tables } from "@/src/types/supabase";
 import { createClient } from "@/utils/supabase/server";
@@ -444,20 +447,16 @@ export default async function StudyUserUpvoteRatePage({
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
       <section className="app-panel mx-auto w-full max-w-7xl space-y-6 rounded-2xl p-6">
+        <ReportIdentity />
+        <ReportNavigation
+          currentStudyId={requestedStudyId}
+          activeHref={`/study/${requestedStudyId}/user-upvote-rate`}
+        />
         <header className="space-y-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-                Humor Study Stats
-              </p>
               <h1 className="text-2xl font-semibold">Study Upvote Percentage by User</h1>
             </div>
-            <Link
-              href="/"
-              className="app-button inline-flex rounded-lg px-3 py-2 text-sm font-medium transition"
-            >
-              Home
-            </Link>
           </div>
           <p className="app-muted text-sm">
             Upvote percentage = <code>upvotes / total votes</code> for each user within the
@@ -535,6 +534,30 @@ export default async function StudyUserUpvoteRatePage({
             </p>
           </article>
         </section>
+
+        <ReportInsightBars
+          title="Top user upvote rates"
+          description="A quick visual read of the five highest user-level upvote percentages."
+          maxValue={1}
+          items={[...report.user_summaries]
+            .sort((left, right) => right.upvote_percentage - left.upvote_percentage)
+            .slice(0, 5)
+            .map((summary) => ({
+              label: summary.user_label,
+              value: summary.upvote_percentage,
+              displayValue: `${formatPercent(summary.upvote_percentage)} (${summary.total_votes.toLocaleString()} votes)`,
+              colorClassName: "bg-rose-500",
+            }))}
+        />
+
+        <ReportInterpretation
+          points={[
+            "The study upvote rate is the weighted baseline across all recorded votes.",
+            "A user's percentage can be unstable when their total-vote count is small, so read the vote count beside every rate.",
+            "The top-user bars are descriptive, not a ranking of humor ability; users may have seen different caption mixes.",
+            "Use the sortable table to inspect downvotes and median vote time when two users have similar percentages.",
+          ]}
+        />
 
         <section className="space-y-2">
           <h2 className="text-lg font-semibold">User Breakdown</h2>

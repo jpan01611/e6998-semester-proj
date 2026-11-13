@@ -1,8 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ReportLoadForm } from "@/components/report-load-form";
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import { ReportInsightBars } from "@/components/report-insight-bars";
+import { ReportInterpretation } from "@/components/report-interpretation";
 import {
   StudyEngagementRiskTable,
   type StudyEngagementRiskTableRow,
@@ -920,24 +923,24 @@ export default async function StudyEngagementRiskPage({
     minVotes: minVotesResult.value,
   });
   const highestRiskUser = getHighestRiskUser(report.user_summaries);
+  const riskLevelCounts = ["high", "medium", "low"].map((riskLevel) => ({
+    riskLevel,
+    count: report.user_summaries.filter((summary) => summary.risk_level === riskLevel).length,
+  }));
 
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
       <section className="app-panel mx-auto w-full max-w-7xl space-y-6 rounded-2xl p-6">
+        <ReportIdentity />
+        <ReportNavigation
+          currentStudyId={requestedStudyId}
+          activeHref={`/study/${requestedStudyId}/engagement-risk`}
+        />
         <header className="space-y-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-                Humor Study Stats
-              </p>
               <h1 className="text-2xl font-semibold">Study Engagement Risk</h1>
             </div>
-            <Link
-              href="/"
-              className="app-button inline-flex rounded-lg px-3 py-2 text-sm font-medium transition"
-            >
-              Home
-            </Link>
           </div>
           <p className="app-muted text-sm">
             Composite risk score = 40% speed/read-load, 30% low leave-one-out consensus agreement,
@@ -1038,6 +1041,31 @@ export default async function StudyEngagementRiskPage({
             </p>
           </article>
         </section>
+
+        <ReportInsightBars
+          title="Risk profile at a glance"
+          description="Included users grouped by the report's low, medium, and high risk levels."
+          items={riskLevelCounts.map(({ riskLevel, count }) => ({
+            label: `${riskLevel[0].toUpperCase()}${riskLevel.slice(1)} risk`,
+            value: count,
+            displayValue: count.toLocaleString(),
+            colorClassName:
+              riskLevel === "high"
+                ? "bg-rose-500"
+                : riskLevel === "medium"
+                  ? "bg-amber-500"
+                  : "bg-emerald-500",
+          }))}
+        />
+
+        <ReportInterpretation
+          points={[
+            "Risk is a screening signal built from speed, consensus agreement, vote monotony, and polarity; it is not a disciplinary conclusion.",
+            "High-risk counts show how many included users trigger the composite threshold, while the table explains the drivers for each person.",
+            "The minimum-votes setting controls evidence quality: raising it can remove sparse user histories from the risk comparison.",
+            "A cohort-wide rushing warning means fast timing may reflect the study context rather than individual behavior alone.",
+          ]}
+        />
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
             <article className="app-card rounded-xl p-4">

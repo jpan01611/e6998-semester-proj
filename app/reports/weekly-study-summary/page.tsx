@@ -1,6 +1,8 @@
-import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import { ReportInterpretation } from "@/components/report-interpretation";
 import { WeeklyStudySummaryCharts } from "@/components/weekly-study-summary-charts";
 import type { Database, Tables } from "@/src/types/supabase";
 import {
@@ -338,11 +340,13 @@ export default async function WeeklyStudySummaryPage({
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
       <section className="app-panel mx-auto w-full max-w-7xl space-y-6 rounded-2xl p-6">
+        <ReportIdentity />
+        <ReportNavigation
+          currentStudyId={studies[0]?.id ?? null}
+          activeHref="/reports/weekly-study-summary"
+        />
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
-            <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-              Humor Study Stats
-            </p>
             <h1 className="text-2xl font-semibold">Weekly Humor Study Summary</h1>
             <p className="app-muted text-sm">
               Studies charted: {chartRows.length} | Generated at: {generatedAtUtc}
@@ -385,13 +389,17 @@ export default async function WeeklyStudySummaryPage({
             ) : null}
           </div>
 
-          <Link
-            href="/"
-            className="app-button inline-flex rounded-lg px-3 py-2 text-sm font-medium transition"
-          >
-            Back to dashboard
-          </Link>
         </header>
+
+        <ReportInterpretation
+          title="How to read the graphs"
+          points={[
+            "Score Trend shows weighted upvote percentage by study; use it to spot changes, not to ignore differences in sample size.",
+            "Engagement Mix compares caption volume, total votes, and votes per caption, so high bars can reflect study size rather than stronger participation.",
+            "Participation vs Score helps find studies that combine broad caption coverage with strong or weak observed scores.",
+            "Hover or expand a graph for exact values and longer study labels; the graphs are descriptive summaries of the selected study window.",
+          ]}
+        />
 
         <WeeklyStudySummaryCharts data={chartRows} />
       </section>

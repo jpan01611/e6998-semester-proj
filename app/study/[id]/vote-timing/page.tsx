@@ -1,8 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ReportLoadForm } from "@/components/report-load-form";
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import { ReportInsightBars } from "@/components/report-insight-bars";
+import { ReportInterpretation } from "@/components/report-interpretation";
 import { StudyVoteTimingTable } from "@/components/study-vote-timing-table";
 import type { Database, Tables } from "@/src/types/supabase";
 import { formatDurationFromMinutes } from "@/utils/format-duration";
@@ -566,20 +569,16 @@ export default async function StudyVoteTimingPage({
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
       <section className="app-panel mx-auto w-full max-w-7xl space-y-6 rounded-2xl p-6">
+        <ReportIdentity />
+        <ReportNavigation
+          currentStudyId={requestedStudyId}
+          activeHref={`/study/${requestedStudyId}/vote-timing`}
+        />
         <header className="space-y-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-                Humor Study Stats
-              </p>
               <h1 className="text-2xl font-semibold">Study Voting Span by User</h1>
             </div>
-            <Link
-              href="/"
-              className="app-button inline-flex rounded-lg px-3 py-2 text-sm font-medium transition"
-            >
-              Home
-            </Link>
           </div>
           <p className="app-muted text-sm">
             Primary metric: <code>last_vote_at_utc - first_vote_at_utc</code> in minutes for each
@@ -677,6 +676,29 @@ export default async function StudyVoteTimingPage({
             </p>
           </article>
         </section>
+
+        <ReportInsightBars
+          title="Voting span at a glance"
+          description="The fastest five included users, shown relative to the longest observed voting span."
+          items={[...selectedReport?.user_summaries ?? []]
+            .sort((left, right) => left.voting_span_minutes - right.voting_span_minutes)
+            .slice(0, 5)
+            .map((summary) => ({
+              label: summary.user_label,
+              value: summary.voting_span_minutes,
+              displayValue: formatDurationFromMinutes(summary.voting_span_minutes),
+              colorClassName: "bg-amber-500",
+            }))}
+        />
+
+        <ReportInterpretation
+          points={[
+            "Voting span is the elapsed time between a user's first and last vote in the study, not the time spent on one caption.",
+            "A short span can indicate concentrated participation; it does not automatically mean rushed or low-quality responses.",
+            "The minimum-votes setting determines which user timelines have enough observations to compare.",
+            "Use the table's first and last timestamps to distinguish a short session from a user who participated across multiple study windows.",
+          ]}
+        />
 
         <section className="space-y-2">
           <h2 className="text-lg font-semibold">User Breakdown</h2>

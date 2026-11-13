@@ -69,6 +69,21 @@ Required Amplify environment variables:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
 
+## Performance test
+
+With the app running locally and an authenticated browser cookie copied from
+the application, run the comparison performance test in PowerShell:
+
+```powershell
+$env:TEST_AUTH_COOKIE = "sb-...=..."
+npm run test:comparison-performance
+```
+
+The test requests `/reports/study-comparison` and fails if the authenticated
+page does not return HTTP 200 or takes 5 seconds or longer. You can override
+the server with `TEST_BASE_URL` and select specific studies with
+`TEST_STUDY_A` and `TEST_STUDY_B`.
+
 Optional:
 
 - `NEXT_PUBLIC_API_BASE_URL`

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -12,6 +11,10 @@ import {
 } from "./caption-gallery-shared";
 
 import { ReportLoadForm } from "@/components/report-load-form";
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import { ReportInsightBars } from "@/components/report-insight-bars";
+import { ReportInterpretation } from "@/components/report-interpretation";
 import type { Database, Tables } from "@/src/types/supabase";
 import { formatDurationFromMinutes } from "@/utils/format-duration";
 import { createClient } from "@/utils/supabase/server";
@@ -30,6 +33,7 @@ const QUERY_RETRY_BASE_DELAY_MS = 150;
 const QUERY_PAGE_SIZE = 1000;
 const MS_PER_MINUTE = 1000 * 60;
 const VOTE_TIME_BUCKET_SIZE_SECONDS = 5;
+const VOTE_TIME_SLIDER_HEADROOM_SECONDS = VOTE_TIME_BUCKET_SIZE_SECONDS;
 
 type StudyDetailSearchParams = Promise<{
   minVoteSeconds?: string;
@@ -443,16 +447,16 @@ const getStudyVoteTimeFilterState = ({
     maxObservedVoteSecond,
   );
   const clampedMaxVoteSecond = clamp(
-    maxVoteSecondsResult.value ?? maxObservedVoteSecond,
+    maxVoteSecondsResult.value ?? maxObservedVoteSecond + VOTE_TIME_SLIDER_HEADROOM_SECONDS,
     0,
-    maxObservedVoteSecond,
+    maxObservedVoteSecond + VOTE_TIME_SLIDER_HEADROOM_SECONDS,
   );
   const selectedMinVoteSecond = Math.min(clampedMinVoteSecond, clampedMaxVoteSecond);
   const selectedMaxVoteSecond = Math.max(clampedMinVoteSecond, clampedMaxVoteSecond);
 
   return {
     available_min_vote_second: 0,
-    available_max_vote_second: maxObservedVoteSecond,
+    available_max_vote_second: maxObservedVoteSecond + VOTE_TIME_SLIDER_HEADROOM_SECONDS,
     selected_min_vote_second: selectedMinVoteSecond,
     selected_max_vote_second: selectedMaxVoteSecond,
     timed_vote_count: timedVoteRows.length,
@@ -821,20 +825,16 @@ export default async function StudyDetailPage({ params, searchParams }: StudyDet
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
       <section className="app-panel mx-auto w-full max-w-7xl space-y-6 rounded-2xl p-6">
+        <ReportIdentity />
+        <ReportNavigation
+          currentStudyId={requestedStudyId}
+          activeHref={`/study/${requestedStudyId}/study-detail`}
+        />
         <header className="space-y-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-                Humor Study Stats
-              </p>
               <h1 className="text-2xl font-semibold">Study Detail</h1>
             </div>
-            <Link
-              href="/"
-              className="app-button inline-flex rounded-lg px-3 py-2 text-sm font-medium transition"
-            >
-              Home
-            </Link>
           </div>
           <p className="app-muted text-sm">
             A study-level vote summary with overall volume, vote mix, and caption-by-caption vote
@@ -935,6 +935,32 @@ export default async function StudyDetailPage({ params, searchParams }: StudyDet
             <p className="mt-2 text-2xl font-semibold">{formatPercent(didntGetItShare)}</p>
           </article>
         </section>
+
+        <ReportInsightBars
+          title="Vote mix at a glance"
+          description="See which responses make up the study before reading the detailed distribution table."
+          maxValue={1}
+          items={report.vote_distribution_rows.map((row) => ({
+            label: row.label,
+            value: row.percentage,
+            displayValue: `${formatPercent(row.percentage)} (${row.count.toLocaleString()})`,
+            colorClassName:
+              row.vote_value === "funny" || row.vote_value === "very funny"
+                ? "bg-emerald-500"
+                : row.vote_value === "didnt get it"
+                  ? "bg-rose-500"
+                  : "bg-cyan-500",
+          }))}
+        />
+
+        <ReportInterpretation
+          points={[
+            "Study upvote rate summarizes all recorded votes; compare it with caption coverage before drawing conclusions.",
+            "Vote mix shows whether the result is concentrated in positive, negative, or unclear responses.",
+            "The vote-time filter recalculates the cards and table using only events inside the selected duration window.",
+            "Median time is resistant to a few unusually slow or fast votes, so it is a better typical-time signal than the maximum.",
+          ]}
+        />
 
         <section className="space-y-3">
           <div>

@@ -11,6 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:comparison-performance": "node --test tests/study-comparison-performance.test.mjs",
     "supabase:types": "supabase login && supabase gen types typescript --project-id qihsgnfjqmkjmoowyfbn --schema public > src/types/supabase.ts"
   },
   "dependencies": {

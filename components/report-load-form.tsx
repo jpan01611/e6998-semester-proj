@@ -9,6 +9,7 @@ type ReportLoadFormProps = {
   children: ReactNode;
   className?: string;
   disabled?: boolean;
+  refreshOnSameQuery?: boolean;
   pathBuilder?: {
     fieldName: string;
     prefix: string;
@@ -20,6 +21,7 @@ export function ReportLoadForm({
   children,
   className,
   disabled = false,
+  refreshOnSameQuery = false,
   pathBuilder,
 }: ReportLoadFormProps) {
   const router = useRouter();
@@ -81,6 +83,11 @@ export function ReportLoadForm({
 
     const nextQuery = nextParams.toString();
     if (nextPathname === pathname && nextQuery === searchParams.toString()) {
+      if (refreshOnSameQuery) {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
       return;
     }
 

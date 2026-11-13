@@ -1,6 +1,9 @@
-import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ReportNavigation } from "@/components/report-navigation";
+import { ReportIdentity } from "@/components/report-identity";
+import { ReportInterpretation } from "@/components/report-interpretation";
+import { ReportLoadForm } from "@/components/report-load-form";
 import type { Database, Tables } from "@/src/types/supabase";
 import {
   type StudyCaptionVoteEventRow,
@@ -8,15 +11,18 @@ import {
 } from "@/utils/study-vote-events";
 import { createClient } from "@/utils/supabase/server";
 
-const QUERY_CHUNK_SIZE = 120;
+const QUERY_CHUNK_SIZE = 25;
 const MIN_QUERY_CHUNK_SIZE = 1;
 const QUERY_RETRY_ATTEMPTS = 3;
 const QUERY_RETRY_BASE_DELAY_MS = 150;
 const QUERY_PAGE_SIZE = 1000;
+const QUERY_CONCURRENCY = 4;
+const MAX_COMPARISON_STUDIES = 52;
 
 type StudyComparisonSearchParams = Promise<{
   studyA?: string;
   studyB?: string;
+  showInactive?: string;
 }>;
 
 type StudyComparisonPageProps = {
@@ -240,8 +246,9 @@ const fetchRowsWithAdaptiveChunks = async <TRow,>({
     }
   };
 
-  for (const chunk of chunkArray(ids, QUERY_CHUNK_SIZE)) {
-    await fetchChunk(chunk);
+  const chunks = chunkArray(ids, QUERY_CHUNK_SIZE);
+  for (let index = 0; index < chunks.length; index += QUERY_CONCURRENCY) {
+    await Promise.all(chunks.slice(index, index + QUERY_CONCURRENCY).map(fetchChunk));
   }
 
   return rows;
@@ -270,6 +277,8 @@ const getStudyLabel = (study: StudySummary) => {
 
   return `Study ${study.id}`;
 };
+
+const getStudyOptionLabel = (study: StudySummary) => getStudyLabel(study);
 
 const formatStudyWindow = (study: StudySummary) => {
   const start = study.start_datetime_utc ?? "n/a";
@@ -364,6 +373,7 @@ const getStudies = async (supabase: SupabaseClient<Database>): Promise<StudySumm
           "id, slug, description, start_datetime_utc, end_datetime_utc, created_datetime_utc",
         )
         .order("id", { ascending: false })
+        .limit(MAX_COMPARISON_STUDIES)
         .range(from, to)) as SupabaseQueryResult<StudySummary>,
   });
 };
@@ -388,6 +398,42 @@ const getStudyCaptionMappings = async (
   });
 };
 
+const getStudiesWithVotes = async (
+  supabase: SupabaseClient<Database>,
+  studies: StudySummary[],
+  mappings: StudyCaptionMappingRow[],
+): Promise<Set<number>> => {
+  const mappingsByStudyId = new Map<number, number[]>();
+  for (const mapping of mappings) {
+    const mappingIds = mappingsByStudyId.get(mapping.study_id) ?? [];
+    mappingIds.push(mapping.id);
+    mappingsByStudyId.set(mapping.study_id, mappingIds);
+  }
+
+  const activeStudyIds = await Promise.all(
+    studies.map(async (study) => {
+      const mappingIds = mappingsByStudyId.get(study.id) ?? [];
+      if (mappingIds.length === 0) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from("study_caption_vote_events")
+        .select("id")
+        .in("study_caption_mapping_id", mappingIds)
+        .limit(1);
+
+      if (error) {
+        throw new Error(`Unable to check study activity: ${error.message || "Unknown query error"}`);
+      }
+
+      return data && data.length > 0 ? study.id : null;
+    }),
+  );
+
+  return new Set(activeStudyIds.filter((studyId): studyId is number => studyId !== null));
+};
+
 const getVoteSummaryByMappingId = async (
   supabase: SupabaseClient<Database>,
   mappingIds: number[],
@@ -408,7 +454,6 @@ const getVoteSummaryByMappingId = async (
           "study_caption_mapping_id",
           chunk.map((value) => Number.parseInt(value, 10)),
         )
-        .order("id", { ascending: true })
         .range(from, to)) as SupabaseQueryResult<StudyVoteRow>,
   });
 
@@ -529,12 +574,29 @@ export default async function StudyComparisonPage({
   const rawStudyAResult = parseStudyIdParam(params.studyA);
   const rawStudyBResult = parseStudyIdParam(params.studyB);
   const generatedAtUtc = new Date().toISOString();
+  const hasExplicitStudyPair = Boolean(params.studyA || params.studyB);
 
   const supabase = await createClient();
   const studies = await getStudies(supabase);
-  const studyById = new Map(studies.map((study) => [study.id, study]));
-  const defaultStudyAId = studies[0]?.id ?? null;
-  const defaultStudyBId = studies.find((study) => study.id !== defaultStudyAId)?.id ?? null;
+  const showInactiveStudies = params.showInactive === "1";
+  const allMappings = hasExplicitStudyPair
+    ? []
+    : await getStudyCaptionMappings(
+        supabase,
+        studies.map((study) => study.id),
+      );
+  const activeStudyIds =
+    showInactiveStudies || hasExplicitStudyPair
+      ? new Set<number>()
+      : await getStudiesWithVotes(supabase, studies, allMappings);
+  const selectableStudies = showInactiveStudies
+    || hasExplicitStudyPair
+    ? studies
+    : studies.filter((study) => activeStudyIds.has(study.id));
+  const studyById = new Map(selectableStudies.map((study) => [study.id, study]));
+  const defaultStudyAId = selectableStudies[0]?.id ?? null;
+  const defaultStudyBId =
+    selectableStudies.find((study) => study.id !== defaultStudyAId)?.id ?? null;
 
   const hasExplicitStudyA = Boolean(params.studyA);
   const hasExplicitStudyB = Boolean(params.studyB);
@@ -563,7 +625,7 @@ export default async function StudyComparisonPage({
     selectedStudyAId === selectedStudyBId
   ) {
     const fallbackStudyBId =
-      studies.find((study) => study.id !== selectedStudyAId)?.id ?? null;
+      selectableStudies.find((study) => study.id !== selectedStudyAId)?.id ?? null;
 
     if (fallbackStudyBId !== null) {
       selectedStudyBId = fallbackStudyBId;
@@ -583,7 +645,9 @@ export default async function StudyComparisonPage({
 
   if (selectedStudyA && selectedStudyB && selectedStudyA.id !== selectedStudyB.id) {
     const studyIds = [selectedStudyA.id, selectedStudyB.id];
-    const mappings = await getStudyCaptionMappings(supabase, studyIds);
+    const mappings = hasExplicitStudyPair
+      ? await getStudyCaptionMappings(supabase, studyIds)
+      : allMappings.filter((mapping) => studyIds.includes(mapping.study_id));
     const mappingsByStudyId = new Map<number, StudyCaptionMappingRow[]>();
     for (const studyId of studyIds) {
       mappingsByStudyId.set(studyId, []);
@@ -605,8 +669,10 @@ export default async function StudyComparisonPage({
     const sharedCaptionIds = new Set(
       [...captionIdsForStudyA].filter((captionId) => captionIdsForStudyB.has(captionId)),
     );
-    const allMappingIds = [...new Set(mappings.map((mapping) => mapping.id))];
-    const voteSummaryByMappingId = await getVoteSummaryByMappingId(supabase, allMappingIds);
+    const voteSummaryByMappingId = await getVoteSummaryByMappingId(
+      supabase,
+      mappings.map((mapping) => mapping.id),
+    );
 
     studyMetricA = buildStudyMetric({
       study: selectedStudyA,
@@ -631,10 +697,12 @@ export default async function StudyComparisonPage({
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
       <section className="app-panel mx-auto w-full max-w-7xl space-y-6 rounded-2xl p-6">
+        <ReportIdentity />
         <header className="space-y-2">
-          <p className="app-kicker text-xs font-semibold uppercase tracking-[0.24em]">
-            Humor Study Stats
-          </p>
+          <ReportNavigation
+            currentStudyId={studies[0]?.id ?? null}
+            activeHref="/reports/study-comparison"
+          />
           <h1 className="text-2xl font-semibold">Study-to-Study Comparison</h1>
           <p className="app-muted text-sm">
             Compare two studies using caption coverage and vote-derived humor metrics.
@@ -645,7 +713,10 @@ export default async function StudyComparisonPage({
           <p className="app-muted text-sm">
             Generated at: {generatedAtUtc}
           </p>
-          <form method="get" className="flex flex-wrap items-end gap-3">
+          <ReportLoadForm
+            className="flex flex-wrap items-end gap-3"
+            refreshOnSameQuery
+          >
             <label className="app-muted space-y-1 text-sm">
               <span className="block">Study A</span>
               <select
@@ -654,9 +725,9 @@ export default async function StudyComparisonPage({
                 disabled={studies.length === 0}
                 className="app-input h-9 min-w-72 rounded-md px-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {studies.map((study) => (
+                {selectableStudies.map((study) => (
                   <option key={`study-a-${study.id}`} value={study.id}>
-                    {getStudyLabel(study)}
+                    {getStudyOptionLabel(study)}
                   </option>
                 ))}
               </select>
@@ -669,9 +740,9 @@ export default async function StudyComparisonPage({
                 disabled={studies.length === 0}
                 className="app-input h-9 min-w-72 rounded-md px-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {studies.map((study) => (
+                {selectableStudies.map((study) => (
                   <option key={`study-b-${study.id}`} value={study.id}>
-                    {getStudyLabel(study)}
+                    {getStudyOptionLabel(study)}
                   </option>
                 ))}
               </select>
@@ -683,7 +754,22 @@ export default async function StudyComparisonPage({
             >
               Refresh
             </button>
-          </form>
+            <label className="app-muted flex items-center gap-2 pb-2 text-sm">
+              <input
+                type="checkbox"
+                name="showInactive"
+                value="1"
+                defaultChecked={showInactiveStudies}
+                className="h-4 w-4 rounded border-slate-300 accent-cyan-500"
+              />
+              Show studies with no recorded votes
+            </label>
+          </ReportLoadForm>
+          <p className="app-muted text-xs">
+            {showInactiveStudies || hasExplicitStudyPair
+              ? "All studies are shown. Detailed vote data is loaded only for the selected pair."
+              : `Showing ${selectableStudies.length} studies with recorded votes. Inactive studies are hidden by default.`}
+          </p>
           {explicitStudyAWasInvalid ? (
             <p className="text-sm text-amber-700 dark:text-amber-300">
               Invalid `studyA` value. Using the newest study instead.
@@ -715,17 +801,17 @@ export default async function StudyComparisonPage({
               At least two studies are required for comparison.
             </p>
           ) : null}
+          {selectableStudies.length < 2 ? (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              Fewer than two studies have recorded votes. Enable the checkbox to inspect inactive
+              studies.
+            </p>
+          ) : null}
           {!hasComparableStudyPair && studies.length >= 2 ? (
             <p className="text-sm text-amber-700 dark:text-amber-300">
               Select two distinct studies to run the comparison.
             </p>
           ) : null}
-          <Link
-            href="/"
-            className="app-button inline-flex rounded-lg px-3 py-2 text-sm font-medium transition"
-          >
-            Back to dashboard
-          </Link>
         </header>
 
         <section className="space-y-2">
@@ -769,6 +855,60 @@ export default async function StudyComparisonPage({
             </p>
           )}
         </section>
+
+        {studyMetricA && studyMetricB && comparisonDelta ? (
+          <section className="app-card space-y-4 rounded-xl p-5">
+            <div>
+              <p className="app-kicker text-xs font-semibold uppercase tracking-[0.2em]">
+                Why are these results different?
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">Compare the evidence behind the like rate</h2>
+              <p className="app-muted mt-2 text-sm">
+                Like rate is the percentage of recorded votes that were positive. This comparison
+                shows the difference in observed responses, while vote and caption counts show how
+                much evidence supports each result.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {[studyMetricA, studyMetricB].map((metric, index) => (
+                <article key={metric.study.id} className="rounded-lg border border-slate-200/70 p-4 dark:border-slate-700/70">
+                  <p className="app-muted text-xs font-semibold uppercase tracking-wide">
+                    Study {index === 0 ? "A" : "B"}
+                  </p>
+                  <h3 className="mt-1 font-semibold">{getStudyLabel(metric.study)}</h3>
+                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-orange-400 to-pink-500"
+                      style={{ width: `${Math.min(100, Math.max(0, metric.weighted_score * 100))}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-2xl font-semibold">
+                    {formatPercent(metric.weighted_score)} <span className="text-sm font-normal">like rate</span>
+                  </p>
+                  <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div><dt className="app-muted">Participants</dt><dd className="font-semibold">{metric.total_votes.toLocaleString()} recorded votes</dd></div>
+                    <div><dt className="app-muted">Caption coverage</dt><dd className="font-semibold">{metric.captions_with_votes.toLocaleString()} of {metric.caption_count.toLocaleString()} captions</dd></div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <p className="app-muted text-sm">
+              {Math.max(studyMetricA.total_votes, studyMetricB.total_votes) < 30
+                ? "Interpretation caution: both results should be treated as exploratory because the number of recorded votes is small."
+                : `Study A differs from Study B by ${formatDeltaPoints(comparisonDelta.weighted_score_delta)}. Investigate caption overlap and participation before treating this difference as an explanation.`}
+            </p>
+          </section>
+        ) : null}
+
+        <ReportInterpretation
+          title="How to interpret the comparison"
+          points={[
+            "Weighted score is total upvotes divided by total votes, so it reflects the observed vote mix rather than a universal quality score.",
+            "Caption overlap and coverage help explain whether the two studies were evaluating comparable material.",
+            "Large deltas with few votes are exploratory; inspect evidence volume before treating a difference as meaningful.",
+            "The comparison describes association in these study results and does not establish why one study differs from another.",
+          ]}
+        />
 
       </section>
     </main>
