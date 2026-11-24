@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ReportNavigation } from "@/components/report-navigation";
 import { ReportIdentity } from "@/components/report-identity";
 import { ReportInterpretation } from "@/components/report-interpretation";
+import { AnalystActionCard } from "@/components/analyst-action-card";
 import { WeeklyStudySummaryCharts } from "@/components/weekly-study-summary-charts";
 import type { Database, Tables } from "@/src/types/supabase";
 import {
@@ -336,6 +337,11 @@ export default async function WeeklyStudySummaryPage({
     caption_count: metric.caption_count,
     votes_per_caption: metric.votes_per_caption,
   }));
+  const highestVoteStudy = chartRows.reduce<(typeof chartRows)[number] | null>(
+    (highest, row) => (!highest || row.total_votes > highest.total_votes ? row : highest),
+    null,
+  );
+  const lowestEvidenceStudy = chartRows.find((row) => row.total_votes < 30) ?? null;
 
   return (
     <main className="page-shell min-h-screen p-6 text-foreground">
@@ -399,6 +405,25 @@ export default async function WeeklyStudySummaryPage({
             "Participation vs Score helps find studies that combine broad caption coverage with strong or weak observed scores.",
             "Hover or expand a graph for exact values and longer study labels; the graphs are descriptive summaries of the selected study window.",
           ]}
+        />
+
+        <AnalystActionCard
+          status={lowestEvidenceStudy ? "wait" : "ready"}
+          finding={
+            lowestEvidenceStudy
+              ? `${lowestEvidenceStudy.study_label} has fewer than 30 recorded votes.`
+              : highestVoteStudy
+                ? `${highestVoteStudy.study_label} has the largest vote sample in this view.`
+                : "There are no studies with recorded data."
+          }
+          action={
+            lowestEvidenceStudy
+              ? "Prioritize complete participation and coverage for low-evidence studies before comparing their scores."
+              : "Start by reviewing the highest-evidence study, then compare its score with studies that have similar caption and participant coverage."
+          }
+          caution={
+            "A larger vote volume improves evidence strength but does not by itself prove that a study result is valid or that differences are meaningful."
+          }
         />
 
         <WeeklyStudySummaryCharts data={chartRows} />

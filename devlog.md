@@ -65,3 +65,13 @@ been recorded.
 - Simplified the dashboard to show the Engagement Mix chart and a View all graphs action, while retaining the study-readiness context.
 
   ![Dashboard Engagement Mix](./public/snapshots/iteration-2-dashboard-engagement.png)
+
+## Iteration 3
+
+> **Pain point:** Analysts can see the metrics, but still need to decide what action to take. Reports should connect a finding to a practical next step while showing what the available evidence cannot establish.
+
+- Added a “What should you do?” action card to the dashboard, Study Comparison, and Weekly Summary. Each card separates the finding, recommended next step, and confidence caveat.
+- The dashboard distinguishes no recorded activity, limited votes, and activity suitable for an initial review. Recommendations include checking data collection, waiting for more responses, and reviewing caption coverage, vote mix, and participant-level outliers.
+- Study Comparison now directs analysts to inspect overlap, vote volume, and participant coverage before acting on differences. It cautions that the comparison is descriptive and cannot establish causation.
+- Weekly Summary highlights a low-evidence study when one is present; otherwise, it points analysts to the study with the most votes and recommends comparisons with similar caption and participant coverage. Vote-count cues are decision aids, not validated statistical readiness thresholds.
+- **Validation:** Production build and targeted ESLint passed after the feedback UI was removed. The next review should test whether analysts find the recommended actions useful and calibrate the simple evidence cues against real study workflows.

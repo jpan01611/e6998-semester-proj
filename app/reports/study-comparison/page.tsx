@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ReportNavigation } from "@/components/report-navigation";
 import { ReportIdentity } from "@/components/report-identity";
 import { ReportInterpretation } from "@/components/report-interpretation";
+import { AnalystActionCard } from "@/components/analyst-action-card";
 import { ReportLoadForm } from "@/components/report-load-form";
 import type { Database, Tables } from "@/src/types/supabase";
 import {
@@ -892,11 +893,30 @@ export default async function StudyComparisonPage({
                 </article>
               ))}
             </div>
-            <p className="app-muted text-sm">
-              {Math.max(studyMetricA.total_votes, studyMetricB.total_votes) < 30
-                ? "Interpretation caution: both results should be treated as exploratory because the number of recorded votes is small."
-                : `Study A differs from Study B by ${formatDeltaPoints(comparisonDelta.weighted_score_delta)}. Investigate caption overlap and participation before treating this difference as an explanation.`}
-            </p>
+            <AnalystActionCard
+              status={
+                Math.max(studyMetricA.total_votes, studyMetricB.total_votes) < 30
+                  ? "wait"
+                  : Math.abs(comparisonDelta.weighted_score_delta) >= 5
+                    ? "investigate"
+                    : "ready"
+              }
+              finding={
+                Math.max(studyMetricA.total_votes, studyMetricB.total_votes) < 30
+                  ? "Both studies have limited recorded vote evidence."
+                  : `Study A's like rate is ${formatDeltaPoints(comparisonDelta.weighted_score_delta)} compared with Study B.`
+              }
+              action={
+                Math.max(studyMetricA.total_votes, studyMetricB.total_votes) < 30
+                  ? "Wait for more votes, then refresh this pair before making a study-readiness decision."
+                  : Math.abs(comparisonDelta.weighted_score_delta) >= 5
+                    ? "Review caption overlap, vote volume, and participant coverage; investigate the largest differences before changing study procedures."
+                    : "Use the result only as a directional checkpoint and confirm that caption overlap and vote coverage are acceptable."
+              }
+              caution={
+                "The comparison is descriptive. It does not establish that one study caused a difference or identify why it occurred."
+              }
+            />
           </section>
         ) : null}
 

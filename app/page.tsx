@@ -1,6 +1,7 @@
 import { TopNavbar } from "@/components/top-navbar";
 import { ReportNavigation } from "@/components/report-navigation";
 import { ReportIdentity } from "@/components/report-identity";
+import { AnalystActionCard } from "@/components/analyst-action-card";
 import {
   WeeklyStudySummaryCharts,
   type WeeklyStudyChartRow,
@@ -201,6 +202,37 @@ export default async function Home() {
                 </Link>
               ) : null}
             </section>
+          ) : null}
+
+          {latestStudy && latestStudyActivity ? (
+            <div className="mt-3">
+              <AnalystActionCard
+                status={
+                  latestStudyActivity.navigationEvents === 0 && latestStudyActivity.voteEvents === 0
+                    ? "wait"
+                    : latestStudyActivity.voteEvents < 30
+                      ? "investigate"
+                      : "ready"
+                }
+                finding={
+                  latestStudyActivity.navigationEvents === 0 && latestStudyActivity.voteEvents === 0
+                    ? "The latest study has no recorded participant activity."
+                    : latestStudyActivity.voteEvents < 30
+                      ? "Participant activity is present, but recorded vote evidence is limited."
+                      : "The latest study has enough recorded activity for an initial analysis review."
+                }
+                action={
+                  latestStudyActivity.navigationEvents === 0 && latestStudyActivity.voteEvents === 0
+                    ? "Wait for participant activity or confirm that data collection is functioning before reporting readiness."
+                    : latestStudyActivity.voteEvents < 30
+                      ? "Check participation coverage and wait for a larger vote sample before making a final study decision."
+                      : "Review caption coverage, vote mix, and participant-level outliers before marking the study ready."
+                }
+                caution={
+                  "Activity volume does not prove data quality. Check collection failures and unusual participation patterns too."
+                }
+              />
+            </div>
           ) : null}
 
         </section>

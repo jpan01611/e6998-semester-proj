@@ -16,6 +16,7 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
+import { recordAnalystEvent } from "@/utils/analyst-chart-usage";
 
 export type WeeklyStudyChartRow = {
   study_id: number;
@@ -126,7 +127,33 @@ export function WeeklyStudySummaryCharts({
   const handleReturn = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    if (expandedChart) {
+      recordAnalystEvent({
+        type: "chart_return",
+        page: window.location.pathname,
+        chart: expandedChart,
+      });
+    }
     setExpandedChart(null);
+  };
+
+  const toggleChart = (chart: ChartType) => {
+    if (expandedChart === chart) {
+      recordAnalystEvent({
+        type: "chart_return",
+        page: window.location.pathname,
+        chart,
+      });
+      setExpandedChart(null);
+      return;
+    }
+
+    recordAnalystEvent({
+      type: "chart_expand",
+      page: window.location.pathname,
+      chart,
+    });
+    setExpandedChart(chart);
   };
 
   if (data.length === 0) {
@@ -179,11 +206,11 @@ export function WeeklyStudySummaryCharts({
           role="button"
           tabIndex={0}
           aria-label="Expand score trend chart"
-          onClick={() => setExpandedChart(expandedChart === "score" ? null : "score")}
+          onClick={() => toggleChart("score")}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              setExpandedChart(expandedChart === "score" ? null : "score");
+              toggleChart("score");
             }
           }}
         >
@@ -248,11 +275,11 @@ export function WeeklyStudySummaryCharts({
           role="button"
           tabIndex={0}
           aria-label="Expand engagement mix chart"
-          onClick={() => setExpandedChart(expandedChart === "engagement" ? null : "engagement")}
+          onClick={() => toggleChart("engagement")}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              setExpandedChart(expandedChart === "engagement" ? null : "engagement");
+              toggleChart("engagement");
             }
           }}
         >
@@ -354,11 +381,11 @@ export function WeeklyStudySummaryCharts({
           role="button"
           tabIndex={0}
           aria-label="Expand participation versus score chart"
-          onClick={() => setExpandedChart(expandedChart === "participation" ? null : "participation")}
+          onClick={() => toggleChart("participation")}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              setExpandedChart(expandedChart === "participation" ? null : "participation");
+              toggleChart("participation");
             }
           }}
         >
